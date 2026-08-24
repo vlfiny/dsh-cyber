@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "official-firecrawl-researcher",
+  "version": "1.0.0",
+  "kind": "employee-blueprint",
+  "displayName": "网络情报研究员",
+  "summary": "面向赛博公司的联网调研角色：把问题拆解成可检索的查询，用 Firecrawl 的真实搜索与网页抓取结果整理出带来源链接的证据清单。",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "publisher": "DSH Cyber",
+  "capabilities": [
+    "employee:blueprint",
+    "knowledge:read"
+  ],
+  "dataEgress": [],
+  "files": [
+    {
+      "path": "researcher.json",
+      "sha256": "4f95998c1bdb03ce8f6ea25b0a7b0eb29530c14155272fd4e53e8c0de27c1128"
+    }
+  ],
+  "entrypoints": [
+    {
+      "id": "firecrawl-researcher-blueprint",
+      "kind": "employee-blueprint",
+      "path": "researcher.json"
+    }
+  ]
+}

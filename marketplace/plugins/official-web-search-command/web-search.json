@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "transforms": [
+    {
+      "id": "web-search",
+      "trigger": "/web-search",
+      "mode": "prepend",
+      "priority": 100,
+      "description": "联网检索指令：要求角色调用 Firecrawl 技能并附来源链接",
+      "instruction": "优先使用 web-research.firecrawl 技能执行真实的联网搜索或网页抓取来回答本次问题；回复必须列出所引用结果的标题与链接。若技能未授权、未配置 Firecrawl API Key 或调用失败，请如实说明当前限制与补救步骤（在 设置 → 集成 中填写 Key），不要编造搜索结果。"
+    }
+  ]
+}

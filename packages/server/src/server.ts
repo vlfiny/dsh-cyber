@@ -27,6 +27,7 @@ import { registerAssetRoutes } from './routes/asset-routes.js'
 import { registerCatalogRoutes } from './routes/catalog-routes.js'
 import { registerConversationRoutes } from './routes/conversation-routes.js'
 import { registerEmployeeRoutes } from './routes/employee-routes.js'
+import { registerIntegrationRoutes } from './routes/integration-routes.js'
 import { registerModelInteractionRoutes } from './routes/model-interaction-routes.js'
 import { registerModelRoutes } from './routes/model-routes.js'
 import { registerPackageRoutes } from './routes/package-routes.js'
@@ -187,7 +188,11 @@ export async function createCyberServer(options: CyberServerOptions): Promise<Cy
     settings: ambientLifeSettings,
     service: ambientLifeRuntime,
   })
-  const skillRegistry = options.skillRegistry ?? createBuiltinSkillRegistry()
+  const skillRegistry = options.skillRegistry ?? createBuiltinSkillRegistry({
+    firecrawl: {
+      resolveApiKey: () => credentials.resolve('integration.firecrawl'),
+    },
+  })
   const skillActions = options.skillActionRepository
     ?? new LocalSkillActionRepository(join(stateRoot, 'skills', 'actions.json'))
   const skillRuntime = new CharacterSkillRuntime(store, {
@@ -217,6 +222,7 @@ export async function createCyberServer(options: CyberServerOptions): Promise<Cy
   registerWorldRuntimeRoutes(router, { store, worldRuntime, worldStreamHub, worldAccess })
   registerWorldTraceRoutes(router, { store, trace: worldTrace, access: worldAccess })
   registerModelInteractionRoutes(router, { store, interactions })
+  registerIntegrationRoutes(router, { credentials })
   registerConversationRoutes(router, { store, orchestrator, peerCollaboration, skillRuntime, runtimeStreamHub, worldRuntime, worldAccess, worldFiles, worldSettings, worldTrace, employeeActivity })
   registerEmployeeRoutes(router, { store, worldAccess })
 

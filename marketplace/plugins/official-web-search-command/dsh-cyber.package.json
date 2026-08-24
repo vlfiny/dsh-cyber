@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "official-web-search-command",
+  "version": "1.0.0",
+  "kind": "plugin",
+  "displayName": "Firecrawl 联网搜索指令",
+  "summary": "为聊天输入框提供 /web-search 指令：要求角色调用 web-research.firecrawl 技能执行真实联网检索，并强制在回答中列出来源链接。",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "publisher": "DSH Cyber",
+  "capabilities": [
+    "prompt:transform"
+  ],
+  "dataEgress": [],
+  "files": [
+    {
+      "path": "web-search.json",
+      "sha256": "d49d08b484db5e1758be9ecd484ab8c6bf3701ed46c324dcc53153208b026e26"
+    }
+  ],
+  "entrypoints": [
+    {
+      "id": "web-search-command",
+      "kind": "prompt-transform",
+      "path": "web-search.json"
+    }
+  ]
+}

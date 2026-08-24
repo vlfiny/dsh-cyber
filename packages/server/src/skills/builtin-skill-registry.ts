@@ -1,8 +1,10 @@
+import { FirecrawlSkillAdapter, type FirecrawlSkillAdapterOptions } from './firecrawl-adapter.js'
 import { HomeAssistantSkillAdapter, type HomeAssistantSkillAdapterOptions } from './home-assistant-adapter.js'
 import { CharacterSkillAdapterRegistry } from './skill-adapter.js'
 
 export interface BuiltinSkillRegistryOptions {
   homeAssistant?: HomeAssistantSkillAdapterOptions
+  firecrawl?: FirecrawlSkillAdapterOptions
 }
 
 /**
@@ -14,5 +16,6 @@ export function createBuiltinSkillRegistry(
 ): CharacterSkillAdapterRegistry {
   const registry = new CharacterSkillAdapterRegistry()
   registry.register(new HomeAssistantSkillAdapter(options.homeAssistant))
+  registry.register(new FirecrawlSkillAdapter(options.firecrawl))
   return registry
 }

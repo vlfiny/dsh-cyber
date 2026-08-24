@@ -13,6 +13,7 @@ import {
   Moon,
   Palette,
   PencilSimple,
+  Plug,
   Plus,
   ShieldCheck,
   Sun,
@@ -20,6 +21,8 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+
+import { FirecrawlSettingsCard } from './FirecrawlSettingsCard.js'
 import type {
   EmployeeInstance,
   ModelApiKind,
@@ -35,7 +38,7 @@ import type {
   World,
 } from '@dsh-cyber/contracts'
 
-export type SettingsSection = 'appearance' | 'models' | 'data' | 'logs' | 'maintenance'
+export type SettingsSection = 'appearance' | 'models' | 'data' | 'logs' | 'integrations' | 'maintenance'
 export type SystemAction = 'status' | 'doctor' | 'backup' | 'export' | 'list-updates' | 'verify-update' | 'contract-update' | 'canary-update' | 'activate-update' | 'rollback-update'
 
 export interface SystemActionInput {
@@ -124,6 +127,7 @@ const sectionGroups = [
     label: '高级',
     items: [
       ['maintenance', '维护与更新', ShieldCheck, '检查状态和更新 DSH'],
+      ['integrations', '集成', Plug, 'Firecrawl 等外部服务凭据'],
     ],
   },
 ] as const
@@ -331,6 +335,7 @@ export function SettingsDialog({
               />
             ) : null}
             {section === 'data' ? <DataSettings pending={pendingAction} result={actionResult} error={actionError} onRun={runSystemAction} /> : null}
+            {section === 'integrations' ? <FirecrawlSettingsCard /> : null}
             {section === 'maintenance' ? <MaintenanceSettings models={models} pending={pendingAction} result={actionResult} error={actionError} onRun={runSystemAction} /> : null}
           </div>
         </div>
