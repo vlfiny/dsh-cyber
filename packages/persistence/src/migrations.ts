@@ -703,6 +703,32 @@ const MIGRATIONS: readonly Migration[] = [
       DROP TABLE _merge_plan;
     `,
   },
+  {
+    version: 16,
+    name: 'purge-merged-direct-session-shells',
+    sql: `
+      -- Physically remove the empty direct-session shells produced by the v15
+      -- consolidation. An archived direct chat without messages carries no
+      -- history, so deleting it is lossless; participants cascade with the row.
+      -- Interaction logs keep their metrics but are detached first, because they
+      -- would otherwise cascade away together with the doomed session.
+
+      UPDATE model_interaction_logs
+      SET session_id = NULL
+      WHERE session_id IN (
+        SELECT s.id
+        FROM work_sessions s
+        WHERE s.kind = 'direct'
+          AND s.status = 'archived'
+          AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id)
+      );
+
+      DELETE FROM work_sessions
+      WHERE kind = 'direct'
+        AND status = 'archived'
+        AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.session_id = work_sessions.id);
+    `,
+  },
 ]
 
 export function migrate(database: DatabaseSync, now: () => string): void {

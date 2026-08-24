@@ -1,4 +1,4 @@
-export const CYBER_SCHEMA_VERSION = 15 as const
+export const CYBER_SCHEMA_VERSION = 16 as const
 
 export type IsoTimestamp = string
 export type JsonPrimitive = boolean | number | string | null

@@ -175,7 +175,7 @@ describe('SqliteStore', () => {
       '收到，我先建立基线。',
     ])
     expect(reopened.getEmployee(employee.id)?.agentSessionId).toBe('harness-session-1')
-    expect(reopened.doctor()).toMatchObject({ ok: true, schemaVersion: 15 })
+    expect(reopened.doctor()).toMatchObject({ ok: true, schemaVersion: 16 })
   })
 
   it('merges duplicate direct sessions of one character into the canonical chat', async () => {
@@ -217,6 +217,19 @@ describe('SqliteStore', () => {
     })
     store.appendMessage({ sessionId: duplicate.id, senderId: 'owner', senderKind: 'owner', kind: 'user', content: '重复会话里的提问' })
     store.appendMessage({ sessionId: duplicate.id, senderId: employee.id, senderKind: 'employee', kind: 'assistant', content: '重复会话里的回复' })
+    const interaction = store.recordModelInteraction({
+      workspaceId: workspace.id,
+      worldId: world.id,
+      sessionId: duplicate.id,
+      source: 'turn',
+      modelId: 'deepseek-v4-flash',
+      provider: 'DeepSeek',
+      status: 'failed',
+      errorCode: 'INVALID_REQUEST',
+      promptMessageCount: 1,
+      promptCharCount: 24,
+      durationMs: 1200,
+    })
     // A group chat and another character's direct session must stay untouched.
     store.createSession({
       workspaceId: workspace.id,
@@ -228,10 +241,10 @@ describe('SqliteStore', () => {
     store.close()
     stores.splice(stores.indexOf(store), 1)
 
-    // Simulate a database written before schema v15 so the migration runs again.
+    // Simulate a database written before schema v15 so the migrations run again.
     const raw = new DatabaseSync(path)
     raw.exec('PRAGMA user_version = 14')
-    raw.prepare('DELETE FROM schema_migrations WHERE version = 15').run()
+    raw.prepare('DELETE FROM schema_migrations WHERE version >= 15').run()
     raw.close()
 
     const reopened = await SqliteStore.open(path)
@@ -239,7 +252,7 @@ describe('SqliteStore', () => {
 
     const openDirect = reopened.listSessions(world.id, 'open').filter((session) => session.kind === 'direct')
     expect(openDirect.map((session) => session.id)).toEqual([canonical.id])
-    expect(reopened.getSession(duplicate.id)).toMatchObject({ status: 'archived' })
+    expect(reopened.getSession(duplicate.id)).toBeUndefined()
     expect(reopened.listMessages(canonical.id).map((message) => message.content)).toEqual([
       '最早的提问',
       '最早的回复',
@@ -247,7 +260,11 @@ describe('SqliteStore', () => {
       '重复会话里的回复',
     ])
     expect(reopened.listMessages(canonical.id).map((message) => message.sequence)).toEqual([1, 2, 3, 4])
-    expect(reopened.doctor()).toMatchObject({ ok: true, schemaVersion: 15 })
+    const preservedInteraction = reopened.getModelInteraction(interaction.id)
+    expect(preservedInteraction).toBeDefined()
+    expect(preservedInteraction?.sessionId).toBeUndefined()
+    expect(preservedInteraction?.errorCode).toBe('INVALID_REQUEST')
+    expect(reopened.doctor()).toMatchObject({ ok: true, schemaVersion: 16 })
   })
 
   it('returns the latest message of one sender without loading the full transcript', async () => {
@@ -387,7 +404,7 @@ describe('SqliteStore', () => {
     expect(backupStore.getWorkspace(workspace.id)?.name).toBe('赛博公司')
     const exported = JSON.parse(await readFile(exportPath, 'utf8')) as any
     expect(exported.format).toBe('dsh-cyber-export')
-    expect(exported.schemaVersion).toBe(15)
+    expect(exported.schemaVersion).toBe(16)
     expect(exported.workspaces[0].worlds[0].world.id).toBe(world.id)
     expect(exported.workspaces[0].worlds[0].employees[0].employee.id).toBe(employee.id)
     expect(exported.workspaces[0].worlds[0].sessions[0].messages[0].content).toBe('世界内记录')
@@ -713,7 +730,7 @@ describe('SqliteStore', () => {
     expect(migrated.listWorkspaces()[0]?.name).toBe('迁移前工作区')
     expect(migrated.doctor()).toMatchObject({
       ok: true,
-      schemaVersion: 15,
+      schemaVersion: 16,
       counts: {
         installedPackages: 0,
         packageTransactions: 0,
