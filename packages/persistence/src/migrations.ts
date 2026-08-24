@@ -612,6 +612,97 @@ const MIGRATIONS: readonly Migration[] = [
         ON task_schedule_runs(schedule_id, started_at DESC);
     `,
   },
+  {
+    version: 15,
+    name: 'consolidate-character-direct-sessions',
+    sql: `
+      -- One character owns at most one canonical direct chat per world (IM model).
+      -- Older versions could create several open direct sessions for the same
+      -- character; keep the earliest as canonical, move its duplicates' messages
+      -- over in chronological order and archive the emptied shells.
+
+      CREATE TEMP TABLE _merge_plan AS
+      WITH single AS (
+        SELECT
+          s.id AS session_id,
+          s.world_id,
+          s.created_at,
+          (
+            SELECT p.participant_id
+            FROM work_session_participants p
+            WHERE p.session_id = s.id AND p.kind = 'employee'
+            LIMIT 1
+          ) AS employee_id
+        FROM work_sessions s
+        WHERE s.kind = 'direct'
+          AND s.status = 'open'
+          AND (
+            SELECT COUNT(*)
+            FROM work_session_participants p
+            WHERE p.session_id = s.id AND p.kind = 'employee'
+          ) = 1
+      ),
+      ranked AS (
+        SELECT
+          single.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY single.world_id, single.employee_id
+            ORDER BY single.created_at, single.session_id
+          ) AS rn
+        FROM single
+      ),
+      canon AS (
+        SELECT world_id, employee_id, session_id AS canonical_id
+        FROM ranked
+        WHERE rn = 1
+      ),
+      dups AS (
+        SELECT r.session_id AS dup_id, c.canonical_id, c.world_id
+        FROM ranked r
+        JOIN canon c
+          ON c.world_id = r.world_id AND c.employee_id = r.employee_id
+        WHERE r.rn > 1
+      )
+      SELECT
+        msg.id AS message_id,
+        d.dup_id AS dup_session,
+        d.canonical_id AS target_session,
+        (
+          SELECT COALESCE(MAX(mm.sequence), 0)
+          FROM messages mm
+          WHERE mm.session_id = d.canonical_id
+        )
+        + ROW_NUMBER() OVER (
+          PARTITION BY d.canonical_id
+          ORDER BY msg.created_at, msg.sequence
+        ) AS new_sequence
+      FROM messages msg
+      JOIN dups d ON msg.session_id = d.dup_id;
+
+      UPDATE messages
+      SET session_id = (
+            SELECT plan.target_session FROM _merge_plan plan WHERE plan.message_id = messages.id
+          ),
+          sequence = (
+            SELECT plan.new_sequence FROM _merge_plan plan WHERE plan.message_id = messages.id
+          )
+      WHERE id IN (SELECT message_id FROM _merge_plan);
+
+      UPDATE work_sessions
+      SET status = 'archived',
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE id IN (SELECT dup_session FROM _merge_plan);
+
+      UPDATE work_sessions
+      SET updated_at = COALESCE(
+        (SELECT MAX(m.created_at) FROM messages m WHERE m.session_id = work_sessions.id),
+        updated_at
+      )
+      WHERE id IN (SELECT DISTINCT target_session FROM _merge_plan);
+
+      DROP TABLE _merge_plan;
+    `,
+  },
 ]
 
 export function migrate(database: DatabaseSync, now: () => string): void {

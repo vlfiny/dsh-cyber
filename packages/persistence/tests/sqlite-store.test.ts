@@ -175,7 +175,79 @@ describe('SqliteStore', () => {
       '收到，我先建立基线。',
     ])
     expect(reopened.getEmployee(employee.id)?.agentSessionId).toBe('harness-session-1')
-    expect(reopened.doctor()).toMatchObject({ ok: true, schemaVersion: 14 })
+    expect(reopened.doctor()).toMatchObject({ ok: true, schemaVersion: 15 })
+  })
+
+  it('merges duplicate direct sessions of one character into the canonical chat', async () => {
+    const { path, store } = await testDatabase()
+    const workspace = store.createWorkspace({ name: '本地工作区' })
+    const world = store.createWorld({
+      workspaceId: workspace.id,
+      name: '赛博公司',
+      templateId: 'cyber-company',
+    })
+    store.saveBlueprint(blueprint())
+    const employee = store.recruitEmployee({
+      workspaceId: workspace.id,
+      worldId: world.id,
+      blueprintId: 'software-engineer',
+      blueprintVersion: 1,
+    })
+    const canonical = store.createSession({
+      workspaceId: workspace.id,
+      worldId: world.id,
+      kind: 'direct',
+      title: `与 ${employee.displayName} 对话`,
+      participants: [
+        { participantId: 'owner', kind: 'owner' },
+        { participantId: employee.id, kind: 'employee' },
+      ],
+    })
+    store.appendMessage({ sessionId: canonical.id, senderId: 'owner', senderKind: 'owner', kind: 'user', content: '最早的提问' })
+    store.appendMessage({ sessionId: canonical.id, senderId: employee.id, senderKind: 'employee', kind: 'assistant', content: '最早的回复' })
+    const duplicate = store.createSession({
+      workspaceId: workspace.id,
+      worldId: world.id,
+      kind: 'direct',
+      title: `与 ${employee.displayName} 对话`,
+      participants: [
+        { participantId: 'owner', kind: 'owner' },
+        { participantId: employee.id, kind: 'employee' },
+      ],
+    })
+    store.appendMessage({ sessionId: duplicate.id, senderId: 'owner', senderKind: 'owner', kind: 'user', content: '重复会话里的提问' })
+    store.appendMessage({ sessionId: duplicate.id, senderId: employee.id, senderKind: 'employee', kind: 'assistant', content: '重复会话里的回复' })
+    // A group chat and another character's direct session must stay untouched.
+    store.createSession({
+      workspaceId: workspace.id,
+      worldId: world.id,
+      kind: 'group',
+      title: '项目群聊',
+      participants: [{ participantId: employee.id, kind: 'employee' }],
+    })
+    store.close()
+    stores.splice(stores.indexOf(store), 1)
+
+    // Simulate a database written before schema v15 so the migration runs again.
+    const raw = new DatabaseSync(path)
+    raw.exec('PRAGMA user_version = 14')
+    raw.prepare('DELETE FROM schema_migrations WHERE version = 15').run()
+    raw.close()
+
+    const reopened = await SqliteStore.open(path)
+    stores.push(reopened)
+
+    const openDirect = reopened.listSessions(world.id, 'open').filter((session) => session.kind === 'direct')
+    expect(openDirect.map((session) => session.id)).toEqual([canonical.id])
+    expect(reopened.getSession(duplicate.id)).toMatchObject({ status: 'archived' })
+    expect(reopened.listMessages(canonical.id).map((message) => message.content)).toEqual([
+      '最早的提问',
+      '最早的回复',
+      '重复会话里的提问',
+      '重复会话里的回复',
+    ])
+    expect(reopened.listMessages(canonical.id).map((message) => message.sequence)).toEqual([1, 2, 3, 4])
+    expect(reopened.doctor()).toMatchObject({ ok: true, schemaVersion: 15 })
   })
 
   it('returns the latest message of one sender without loading the full transcript', async () => {
@@ -315,7 +387,7 @@ describe('SqliteStore', () => {
     expect(backupStore.getWorkspace(workspace.id)?.name).toBe('赛博公司')
     const exported = JSON.parse(await readFile(exportPath, 'utf8')) as any
     expect(exported.format).toBe('dsh-cyber-export')
-    expect(exported.schemaVersion).toBe(14)
+    expect(exported.schemaVersion).toBe(15)
     expect(exported.workspaces[0].worlds[0].world.id).toBe(world.id)
     expect(exported.workspaces[0].worlds[0].employees[0].employee.id).toBe(employee.id)
     expect(exported.workspaces[0].worlds[0].sessions[0].messages[0].content).toBe('世界内记录')
@@ -641,7 +713,7 @@ describe('SqliteStore', () => {
     expect(migrated.listWorkspaces()[0]?.name).toBe('迁移前工作区')
     expect(migrated.doctor()).toMatchObject({
       ok: true,
-      schemaVersion: 14,
+      schemaVersion: 15,
       counts: {
         installedPackages: 0,
         packageTransactions: 0,
