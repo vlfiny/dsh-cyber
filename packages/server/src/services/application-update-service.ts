@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { mkdir, rm } from 'node:fs/promises'
+import { statSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -130,9 +131,16 @@ function errorMessage(error: unknown): string {
 }
 
 function samePath(left: string, right: string): boolean {
-  const normalizedLeft = resolve(left)
-  const normalizedRight = resolve(right)
-  return process.platform === 'win32'
-    ? normalizedLeft.toLocaleLowerCase() === normalizedRight.toLocaleLowerCase()
-    : normalizedLeft === normalizedRight
+  // Windows may surface the same directory through different spellings: 8.3
+  // aliases (`ADMINI~1`) vs long names, forward vs back slashes, or case
+  // differences. String comparison cannot be trusted; compare filesystem
+  // identity (dev + ino) instead, falling back to a case-insensitive string
+  // check only when stat fails.
+  try {
+    const leftStat = statSync(resolve(left))
+    const rightStat = statSync(resolve(right))
+    return leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino
+  } catch {
+    return resolve(left).toLocaleLowerCase() === resolve(right).toLocaleLowerCase()
+  }
 }
